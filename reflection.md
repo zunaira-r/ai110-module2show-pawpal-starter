@@ -5,7 +5,99 @@
 **a. Initial design**
 
 - Briefly describe your initial UML design.
+three core actions the user should be able to perform: add a pet-related task (walk/feed), view schedule each day, add pet(s)
 - What classes did you include, and what responsibilities did you assign to each?
+The classes I want to include are: Pet, Owner, Task, Scheduler.
+
+Pet
+- Attributes: petID, ownerID, name, type (animal), breed, age, weight, healthIssues, medications, feedingSchedule/dietaryNeeds
+- Methods: getUpcomingTasks(), viewMedicalHistory()
+
+Owner
+- Attributes: ownerID, name, contactInfo (email/phone), pets (list of Pet)
+- Methods: viewPets(), viewTasks(), addTask(), modifyTask(), cancelTask(), addPet(), removePet()
+
+Task
+- Attributes: taskID, taskName, taskType (feed/walk/medication/appointment), petID, dueDate/time, duration, priority, status (pending/completed/cancelled), recurrence
+- Methods: modifyTask(), cancelTask(), markComplete(), isOverdue()
+
+Scheduler
+- Attributes: taskList (list of Task), ownerID, petID, date/dateRange
+- Methods: displaySchedule(), getDailySchedule(), prioritizeTasks(), addTaskToSchedule(), removeTaskFromSchedule(), detectConflicts()
+
+Design notes:
+- Classes are linked by IDs (ownerID, petID, taskID) rather than names, since names are not unique and can change.
+- Relationships are held explicitly: Owner has a list of Pets, and Scheduler holds a list of Tasks.
+
+**Class diagram (Mermaid):**
+
+```mermaid
+classDiagram
+    class Pet {
+        +String petID
+        +String ownerID
+        +String name
+        +String type
+        +String breed
+        +int age
+        +float weight
+        +String[] healthIssues
+        +String[] medications
+        +String feedingSchedule
+        +getUpcomingTasks() Task[]
+        +viewMedicalHistory() String
+    }
+
+    class Owner {
+        +String ownerID
+        +String name
+        +String contactInfo
+        +Pet[] pets
+        +viewPets() Pet[]
+        +viewTasks() Task[]
+        +addTask(Task) void
+        +modifyTask(Task) void
+        +cancelTask(taskID) void
+        +addPet(Pet) void
+        +removePet(petID) void
+    }
+
+    class Task {
+        +String taskID
+        +String taskName
+        +String taskType
+        +String petID
+        +DateTime dueDate
+        +int duration
+        +int priority
+        +String status
+        +String recurrence
+        +modifyTask() void
+        +cancelTask() void
+        +markComplete() void
+        +isOverdue() bool
+    }
+
+    class Scheduler {
+        +Task[] taskList
+        +String ownerID
+        +String petID
+        +DateRange dateRange
+        +displaySchedule() void
+        +getDailySchedule(date) Task[]
+        +prioritizeTasks() Task[]
+        +addTaskToSchedule(Task) void
+        +removeTaskFromSchedule(taskID) void
+        +detectConflicts() Task[]
+    }
+
+    Owner "1" o-- "0..*" Pet : owns
+    Pet "1" --> "0..*" Task : has
+    Owner "1" --> "0..*" Task : creates
+    Scheduler "1" o-- "0..*" Task : organizes
+    Owner "1" ..> "1" Scheduler : uses
+```
+
 
 **b. Design changes**
 
