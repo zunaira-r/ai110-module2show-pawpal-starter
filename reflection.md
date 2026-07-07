@@ -102,7 +102,9 @@ classDiagram
 **b. Design changes**
 
 - Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+
+    Yes. During implementation I fixed the issue of where tasks should live to one location so its updated everywhere automatically. 
+#- If yes, describe at least one change and why you made it.
 
 ---
 
