@@ -59,18 +59,37 @@ Paste a sample of your app's CLI or Streamlit output here so a reader can see wh
 
 ## 🧪 Testing PawPal+
 
-```bash
-# Run the full test suite:
-pytest
+Run the full test suite from the project root:
 
-# Run with coverage:
-pytest --cov
+```bash
+python -m pytest
 ```
+
+The suite (`tests/test_pawpal.py`) covers the most important scheduling behaviors:
+
+- **Task status** — `markComplete()` moves a task from `pending` to `completed`.
+- **Task registration** — adding a task through an owner increases that pet's task count in the scheduler.
+- **Sorting correctness** — `sort_by_time()` returns tasks in chronological `HH:MM` order and leaves the original list unmutated.
+- **Recurrence logic** — completing a `daily` task marks the original complete and auto-schedules a fresh `pending` task for the next day (including month rollovers, e.g. Jan 31 → Feb 1).
+- **Conflict detection** — `detectTimeConflicts()` flags two active tasks sharing a time slot and ignores cancelled tasks.
 
 Sample test output:
 
 ```
-# Paste your pytest output here
+============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-9.1.1, pluggy-1.6.0
+cachedir: .pytest_cache
+rootdir: C:\Users\User\CodePath\ai110-module2show-pawpal-starter
+collecting ... collected 6 items
+
+tests/test_pawpal.py::test_mark_complete_changes_status PASSED           [ 16%]
+tests/test_pawpal.py::test_adding_task_increases_pet_task_count PASSED   [ 33%]
+tests/test_pawpal.py::test_sort_by_time_returns_chronological_order PASSED [ 50%]
+tests/test_pawpal.py::test_completing_daily_task_schedules_next_day PASSED [ 66%]
+tests/test_pawpal.py::test_detect_time_conflicts_flags_duplicate_times PASSED [ 83%]
+tests/test_pawpal.py::test_detect_time_conflicts_ignores_cancelled_tasks PASSED [100%]
+
+============================== 6 passed in 0.02s ==============================
 ```
 
 ## 📐 Smarter Scheduling
