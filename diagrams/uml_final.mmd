@@ -1,0 +1,71 @@
+classDiagram
+    class Pet {
+        +String petID
+        +String ownerID
+        +String name
+        +String type
+        +String breed
+        +int age
+        +float weight
+        +String[] healthIssues
+        +String[] medications
+        +String feedingSchedule
+        +getUpcomingTasks(Scheduler) Task[]
+        +viewMedicalHistory() String
+    }
+
+    class Owner {
+        +String ownerID
+        +String name
+        +String contactInfo
+        +Pet[] pets
+        +viewPets() Pet[]
+        +viewTasks(Scheduler) Task[]
+        +addTask(Task, Scheduler) void
+        +modifyTask(Task, Scheduler) void
+        +cancelTask(taskID, Scheduler) void
+        +addPet(Pet) void
+        +removePet(petID) void
+    }
+
+    class Task {
+        +String taskID
+        +String taskName
+        +String taskType
+        +String petID
+        +DateTime dueDate
+        +String time
+        +int duration
+        +int priority
+        +String status
+        +String recurrence
+        +modifyTask() void
+        +cancelTask() void
+        +markComplete() void
+        +isOverdue() bool
+        +nextOccurrence() Task
+        -validate_time(value) void
+    }
+
+    class Scheduler {
+        +String ownerID
+        +Task[] taskList
+        +DateRange dateRange
+        +getTasksForPet(petID) Task[]
+        +displaySchedule() void
+        +getDailySchedule(date) Task[]
+        +filterTasks(status, petName, pets) Task[]
+        +sort_by_time() Task[]
+        +prioritizeTasks() Task[]
+        +completeTask(taskID) Task
+        +addTaskToSchedule(Task) void
+        +removeTaskFromSchedule(taskID) void
+        +detectTimeConflicts() String[]
+        +detectConflicts() Task[]
+    }
+
+    Owner "1" o-- "0..*" Pet : owns
+    Scheduler "1" *-- "0..*" Task : owns all tasks
+    Owner "1" ..> "1" Scheduler : delegates task CRUD
+    Pet "1" ..> "1" Scheduler : looks up its tasks
+    Task ..> Pet : references by petID

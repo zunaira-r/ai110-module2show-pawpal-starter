@@ -121,24 +121,45 @@ else:
         owner.addTask(task, scheduler)
         st.success(f"Scheduled '{task.taskName}' for {selected_pet}.")
 
-# --- Current tasks -> Owner.viewTasks() ---
+# --- Current tasks -> Scheduler.filterTasks() + sort_by_time() ---
 tasks = owner.viewTasks(scheduler)
 if tasks:
     pet_names = {p.petID: p.name for p in pets}
-    st.write("Current tasks:")
-    st.table(
-        [
-            {
-                "Time": t.dueDate.strftime("%H:%M") if t.dueDate else "—",
-                "Task": t.taskName,
-                "Type": t.taskType,
-                "Pet": pet_names.get(t.petID, t.petID),
-                "Priority": t.priority,
-                "Status": t.status,
-            }
-            for t in tasks
-        ]
+
+    st.subheader("Current Tasks")
+    fcol1, fcol2 = st.columns(2)
+    with fcol1:
+        status_filter = st.selectbox(
+            "Filter by status", ["all", "pending", "completed", "cancelled"]
+        )
+    with fcol2:
+        pet_filter = st.selectbox("Filter by pet", ["all"] + [p.name for p in pets])
+
+    # Delegate filtering to the Scheduler, then order chronologically.
+    filtered = scheduler.filterTasks(
+        status=None if status_filter == "all" else status_filter,
+        petName=None if pet_filter == "all" else pet_filter,
+        pets=pets,
     )
+    filtered = sorted(filtered, key=lambda t: (t.time == "", t.time))
+
+    if filtered:
+        st.table(
+            [
+                {
+                    "Time": t.dueDate.strftime("%H:%M") if t.dueDate else "—",
+                    "Task": t.taskName,
+                    "Type": t.taskType,
+                    "Pet": pet_names.get(t.petID, t.petID),
+                    "Priority": t.priority,
+                    "Status": t.status,
+                }
+                for t in filtered
+            ]
+        )
+        st.caption(f"Showing {len(filtered)} of {len(tasks)} task(s).")
+    else:
+        st.warning("No tasks match the selected filters.")
 else:
     st.info("No tasks yet. Add one above.")
 
@@ -155,14 +176,29 @@ if st.button("Generate schedule"):
     else:
         pet_names = {p.petID: p.name for p in pets}
         st.markdown(f"### Today's Schedule — {datetime.now():%A, %b %d %Y}")
-        for t in daily:
-            pet = pet_names.get(t.petID, t.petID)
-            st.write(
-                f"**{t.dueDate:%H:%M}** · {t.taskName} ({t.taskType}) "
-                f"— {pet} · P{t.priority}"
-            )
+        st.success(f"Planned {len(daily)} task(s) for today, ordered by due time.")
+        st.table(
+            [
+                {
+                    "Time": f"{t.dueDate:%H:%M}",
+                    "Task": t.taskName,
+                    "Type": t.taskType,
+                    "Pet": pet_names.get(t.petID, t.petID),
+                    "Priority": f"P{t.priority}",
+                }
+                for t in daily
+            ]
+        )
 
+        # Same-slot clashes (lightweight) -> per-warning messages.
+        slot_warnings = scheduler.detectTimeConflicts()
+        for warning in slot_warnings:
+            st.warning(warning)
+
+        # Interval-overlap clashes that also account for duration.
         conflicts = scheduler.detectConflicts()
         if conflicts:
             names = ", ".join(f"{t.taskName} @ {t.dueDate:%H:%M}" for t in conflicts)
-            st.error(f"⚠ Time conflicts detected: {names}")
+            st.error(f"⚠ Overlapping tasks detected: {names}")
+        elif not slot_warnings:
+            st.success("✅ No scheduling conflicts detected.")

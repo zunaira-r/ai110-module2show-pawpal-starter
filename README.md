@@ -42,20 +42,17 @@ pip install -r requirements.txt
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
 
-## 🖥️ Sample Output
+## ✨ Features
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
+PawPal+ implements the following algorithms and behaviors:
 
-```
-==============================================
-  Today's Schedule - Tuesday, Jul 07 2026
-  Owner: Zunaiira
-==============================================
-  08:00  P2  Morning walk         Milo (walk)
-  12:30  P3  Lunch feeding        Luna (feed)
-  18:00  P5  Evening medication   Luna (medication)
-  18:30  P2  Evening walk         Milo (walk)
-```
+- **Sorting by time** — `Scheduler.sort_by_time()` orders tasks chronologically by their zero-padded `"HH:MM"` string, and `getDailySchedule()` returns a single day's tasks ordered by due time.
+- **Priority ranking** — `Scheduler.prioritizeTasks()` sorts by priority (highest first), then by due date, so the most important tasks surface first.
+- **Filtering** — `Scheduler.filterTasks()` filters tasks by completion status, by pet name, or both (logical AND).
+- **Conflict warnings** — `Scheduler.detectTimeConflicts()` flags active tasks sharing the same `"HH:MM"` slot; `detectConflicts()` does the heavier interval-overlap check that also accounts for task `duration`.
+- **Daily recurrence** — completing a recurring task (`Scheduler.completeTask()` + `Task.nextOccurrence()`) auto-schedules its next `daily`/`weekly` occurrence, handling month/year rollovers.
+- **Task lifecycle** — tasks move through `pending → completed / cancelled` via `markComplete()` and `cancelTask()`, with `isOverdue()` reporting past-due pending tasks.
+- **Input validation** — `Task._validate_time()` enforces the zero-padded 24-hour `"HH:MM"` format at construction and on edit, which is what makes lexicographic time sorting correct.
 
 ## 🧪 Testing PawPal+
 
@@ -139,14 +136,73 @@ math lives in `Task.nextOccurrence()`, which uses `timedelta(days=1)` /
 task due Jan 31 rolls to Feb 1). One-off tasks (`recurrence=""`) return `None`
 and nothing is rescheduled.
 
-## 📸 Demo Walkthrough
+## 🎬 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+### The UI (Streamlit — `streamlit run app.py`)
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+The app is a single page with four sections. A user can:
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+1. **Owner** — set the owner's name.
+2. **Add a Pet** — enter a pet name and species and click **Add pet**. Added pets appear in a running caption.
+3. **Schedule a Task** — pick a pet, then set a title, duration, priority (low/medium/high), type (walk/feed/medication/appointment), and a due time, then click **Add task**.
+4. **Current Tasks** — a live table of all tasks with **filter dropdowns** for status and pet (backed by `Scheduler.filterTasks()`), shown in chronological order.
+5. **Build Schedule** — click **Generate schedule** to render today's plan as a table, with conflict banners driven by the Scheduler.
+
+### Example workflow
+
+> Add a pet (**Milo the dog**) → schedule a task (**Morning walk at 08:00**) → schedule another (**Breakfast at 08:00** for **Luna**) → click **Generate schedule** → see today's plan sorted by time, with an `st.warning` flagging the 08:00 clash.
+
+### Key Scheduler behaviors shown
+
+- **Sorting** — tasks entered out of order come back ordered by time (`08:00 → 18:30`).
+- **Filtering** — narrowing to `status = pending` or `pet = Luna` updates the table instantly.
+- **Conflict warnings** — two tasks at `08:00` trigger both the lightweight same-slot warning (`detectTimeConflicts`) and, since their windows overlap, the interval-overlap error (`detectConflicts`).
+
+### Sample CLI output (`python main.py`)
+
+`main.py` builds an owner (Zunaiira) with two pets (Milo, Luna) and five tasks — deliberately added out of order, with two at 08:00 to force a conflict — then prints the schedule and demonstrates each algorithm:
+
+```
+==============================================
+  Today's Schedule - Tuesday, Jul 07 2026
+  Owner: Zunaiira
+==============================================
+  08:00  P2  Morning walk         Milo (walk)
+  08:00  P3  Breakfast            Luna (feed)
+  12:30  P3  Lunch feeding        Luna (feed)
+  18:00  P5  Evening medication   Luna (medication)
+  18:30  P2  Evening walk         Milo (walk)
+----------------------------------------------
+  ! Time conflicts detected:
+    - Morning walk at 08:00
+    - Breakfast at 08:00
+
+==============================================
+  Tasks sorted by time (sort_by_time)
+==============================================
+  08:00  Morning walk         Milo [pending]
+  08:00  Breakfast            Luna [pending]
+  12:30  Lunch feeding        Luna [pending]
+  18:00  Evening medication   Luna [completed]
+  18:30  Evening walk         Milo [pending]
+
+==============================================
+  Filter: status == 'pending'
+==============================================
+  08:00  Morning walk         Milo [pending]
+  18:30  Evening walk         Milo [pending]
+  12:30  Lunch feeding        Luna [pending]
+  08:00  Breakfast            Luna [pending]
+
+==============================================
+  Filter: petName == 'Luna'
+==============================================
+  18:00  Evening medication   Luna [completed]
+  12:30  Lunch feeding        Luna [pending]
+  08:00  Breakfast            Luna [pending]
+
+==============================================
+  Time conflict check (detectTimeConflicts)
+==============================================
+  WARNING: 2 tasks at 08:00 [different pets] -> Morning walk (pet P1), Breakfast (pet P2)
+```
