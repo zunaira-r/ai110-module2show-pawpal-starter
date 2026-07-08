@@ -113,13 +113,19 @@ classDiagram
 **a. Constraints and priorities**
 
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
+
+sort_by_time() orders tasks by their "HH:MM" time, and getDailySchedule() filters to a single day. Time is the backbone of a daily care routine.
+
 - How did you decide which constraints mattered most?
+I chose the ranking as time first and then priority. Its because the owner should know what happens at a certain time and if there is only the opportunity to do certain tasks and not all, thats when priority comes in.
 
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+ My lightweight detectTimeConflicts() matches conflicts by exact "HH:MM" string equality, not by true time-window overlap. An 08:00 task lasting 30 minutes and an 08:15 task would not be flagged, even though they actually overlap. (My heavier detectConflicts() does the real interval math using duration, but the lightweight one intentionally does not.)
 
+- Why is that tradeoff reasonable for this scenario?
+tasks are short and set at clean times like 08:00 or 12:30, so exact-slot matching catches the conflicts that actually happen. In return, I get a fast check that prints a warning instead of crashing
 ---
 
 ## 3. AI Collaboration

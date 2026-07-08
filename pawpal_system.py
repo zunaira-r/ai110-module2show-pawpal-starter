@@ -53,16 +53,41 @@ class Task:
     taskType: str
     petID: str
     dueDate: Optional[datetime] = None
+    time: str = ""  # "HH:MM" 24-hour, zero-padded (e.g. "08:30")
     duration: int = 0  # minutes
     priority: int = 0
     status: str = "pending"  # pending | completed | cancelled
     recurrence: str = ""  # e.g. "daily", "weekly", "" for one-off
+
+    def __post_init__(self) -> None:
+        """Validate the time string right after the dataclass is constructed."""
+        if self.time:  # "" means unscheduled, so only check non-empty values
+            self._validate_time(self.time)
+
+    @staticmethod
+    def _validate_time(value: str) -> None:
+        """Raise ValueError unless value is a zero-padded 24-hour "HH:MM" string.
+
+        Zero-padding matters: sort_by_time relies on lexicographic string
+        order matching clock order, which only holds when both parts are two
+        digits (so "08:30" not "8:30").
+        """
+        parts = value.split(":")
+        if len(parts) != 2 or not all(p.isdigit() and len(p) == 2 for p in parts):
+            raise ValueError(
+                f"time must be zero-padded 'HH:MM' (e.g. '08:30'), got {value!r}"
+            )
+        hours, minutes = int(parts[0]), int(parts[1])
+        if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+            raise ValueError(f"time out of range 00:00–23:59, got {value!r}")
 
     def modifyTask(self, **changes) -> None:
         """Update this task's details from the given keyword arguments."""
         for key, value in changes.items():
             if not hasattr(self, key):
                 raise AttributeError(f"Task has no attribute {key!r}")
+            if key == "time" and value:
+                self._validate_time(value)
             setattr(self, key, value)
 
     def cancelTask(self) -> None:
@@ -72,6 +97,39 @@ class Task:
     def markComplete(self) -> None:
         """Mark this task as completed."""
         self.status = "completed"
+
+    def nextOccurrence(self) -> Optional["Task"]:
+        """Return a fresh pending Task for the next occurrence, or None.
+
+        Returns None when the task is one-off (recurrence "") or has no
+        dueDate to advance from. timedelta is used for the date math so that
+        rollovers across months and years are handled correctly (e.g. a daily
+        task due Jan 31 correctly rolls to Feb 1).
+        """
+        if self.recurrence == "daily":
+            delta = timedelta(days=1)
+        elif self.recurrence == "weekly":
+            delta = timedelta(weeks=1)
+        else:
+            return None
+
+        if self.dueDate is None:
+            return None
+
+        next_due = self.dueDate + delta
+        base_id = self.taskID.split("@")[0]  # keep the ID stable across recurrences
+        return Task(
+            taskID=f"{base_id}@{next_due:%Y%m%d}",
+            taskName=self.taskName,
+            taskType=self.taskType,
+            petID=self.petID,
+            dueDate=next_due,
+            time=self.time,  # same clock time, just a later date
+            duration=self.duration,
+            priority=self.priority,
+            status="pending",
+            recurrence=self.recurrence,
+        )
 
     def isOverdue(self) -> bool:
         """Return True if the task is past its due date and not completed."""
@@ -169,6 +227,63 @@ class Scheduler:
         day_tasks.sort(key=lambda t: t.dueDate)
         return day_tasks
 
+    def filterTasks(
+        self,
+        status: Optional[str] = None,
+        petName: Optional[str] = None,
+        pets: Optional[list[Pet]] = None,
+    ) -> list[Task]:
+        """Return tasks filtered by completion status and/or pet name.
+
+        Both filters are optional and combine with logical AND: passing neither
+        returns every task, while passing both keeps only tasks matching both.
+        A new list is returned; ``self.taskList`` is never mutated.
+
+        Args:
+            status: Keep tasks whose ``.status`` equals this value
+                ("pending", "completed", or "cancelled"). None means "any".
+            petName: Keep tasks belonging to the pet with this name. A Task
+                only stores ``petID``, so ``pets`` must also be supplied to
+                resolve the name to its petID(s). None means "any".
+            pets: The Pet objects used to look up petName -> petID. Ignored
+                unless ``petName`` is given.
+
+        Returns:
+            A new list of matching Task objects (empty if none match).
+
+        Example:
+            >>> scheduler.filterTasks(status="pending", petName="Luna", pets=owner.viewPets())
+            [Task(taskID='T2', ...)]
+        """
+        results = self.taskList
+
+        if status is not None:
+            results = [t for t in results if t.status == status]
+
+        if petName is not None:
+            matching_ids = {p.petID for p in (pets or []) if p.name == petName}
+            results = [t for t in results if t.petID in matching_ids]
+
+        return list(results)
+
+    def sort_by_time(self) -> list[Task]:
+        """Return this scheduler's tasks sorted chronologically by their HH:MM time.
+
+        The ``key=lambda t: t.time`` argument tells ``sorted`` to compare each
+        task's ``time`` string rather than the Task object itself. Because
+        "HH:MM" is fixed-width and zero-padded, plain string (lexicographic)
+        comparison already matches clock order — no time parsing needed.
+
+        Returns:
+            A new list of Task objects in ascending time order; ``self.taskList``
+            is left unchanged.
+
+        Example:
+            >>> [t.time for t in scheduler.sort_by_time()]
+            ['08:30', '09:15', '13:00']
+        """
+        return sorted(self.taskList, key=lambda t: t.time)
+
     def prioritizeTasks(self) -> list[Task]:
         """Return tasks sorted by priority (highest first), then by due date."""
         return sorted(
@@ -180,6 +295,23 @@ class Scheduler:
             ),
         )
 
+    def completeTask(self, taskID: str) -> Optional[Task]:
+        """Mark a task complete and auto-schedule its next occurrence if recurring.
+
+        Returns the newly created follow-up Task (already added to the
+        schedule), or None if the completed task was one-off.
+        """
+        task = next((t for t in self.taskList if t.taskID == taskID), None)
+        if task is None:
+            raise ValueError(f"Task {taskID!r} is not in the schedule")
+
+        task.markComplete()
+
+        follow_up = task.nextOccurrence()
+        if follow_up is not None:
+            self.addTaskToSchedule(follow_up)
+        return follow_up
+
     def addTaskToSchedule(self, task: Task) -> None:
         """Add a task to the schedule."""
         if any(t.taskID == task.taskID for t in self.taskList):
@@ -189,6 +321,32 @@ class Scheduler:
     def removeTaskFromSchedule(self, taskID: str) -> None:
         """Remove a task from the schedule by its ID."""
         self.taskList = [t for t in self.taskList if t.taskID != taskID]
+
+    def detectTimeConflicts(self) -> list[str]:
+        """Return warning messages for tasks sharing the same HH:MM time slot.
+
+        A deliberately "lightweight" check: it groups active (non-cancelled)
+        tasks by their ``time`` string and flags any slot holding more than one
+        task — whether they belong to the same pet or different pets. It never
+        raises; an empty list simply means no clashes were found.
+        """
+        by_time: dict[str, list[Task]] = {}
+        for task in self.taskList:
+            if task.status == "cancelled" or not task.time:
+                continue  # skip cancelled/unscheduled tasks
+            by_time.setdefault(task.time, []).append(task)
+
+        warnings: list[str] = []
+        for time_slot, clashing in sorted(by_time.items()):
+            if len(clashing) > 1:
+                same_pet = len({t.petID for t in clashing}) == 1
+                scope = "same pet" if same_pet else "different pets"
+                names = ", ".join(f"{t.taskName} (pet {t.petID})" for t in clashing)
+                warnings.append(
+                    f"WARNING: {len(clashing)} tasks at {time_slot} "
+                    f"[{scope}] -> {names}"
+                )
+        return warnings
 
     def detectConflicts(self) -> list[Task]:
         """Return tasks whose [dueDate, dueDate + duration] windows overlap."""

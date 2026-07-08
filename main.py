@@ -39,11 +39,19 @@ def build_demo():
     evening = today.replace(hour=18, minute=0)
     night = today.replace(hour=18, minute=30)
 
+    # Added deliberately OUT OF ORDER so sort_by_time() has real work to do.
     tasks = [
-        Task("T1", "Morning walk", "walk", "P1", dueDate=morning, duration=30, priority=2),
-        Task("T2", "Lunch feeding", "feed", "P2", dueDate=noon, duration=15, priority=3),
-        Task("T3", "Evening medication", "medication", "P2", dueDate=evening, duration=5, priority=5),
-        Task("T4", "Evening walk", "walk", "P1", dueDate=night, duration=30, priority=2),
+        Task("T3", "Evening medication", "medication", "P2", dueDate=evening,
+             time="18:00", duration=5, priority=5, status="completed"),
+        Task("T1", "Morning walk", "walk", "P1", dueDate=morning,
+             time="08:00", duration=30, priority=2),
+        Task("T4", "Evening walk", "walk", "P1", dueDate=night,
+             time="18:30", duration=30, priority=2),
+        Task("T2", "Lunch feeding", "feed", "P2", dueDate=noon,
+             time="12:30", duration=15, priority=3),
+        # T5 deliberately clashes with T1 (both at 08:00) to trigger a warning.
+        Task("T5", "Breakfast", "feed", "P2", dueDate=morning,
+             time="08:00", duration=10, priority=3),
     ]
     for task in tasks:
         owner.addTask(task, scheduler)
@@ -81,9 +89,55 @@ def print_todays_schedule(owner: Owner, scheduler: Scheduler) -> None:
             print(f"    - {task.taskName} at {task.dueDate.strftime('%H:%M')}")
 
 
+def print_sorted_and_filtered(owner: Owner, scheduler: Scheduler) -> None:
+    """Demonstrate the Scheduler.sort_by_time() and filterTasks() methods."""
+    pet_names = {pet.petID: pet.name for pet in owner.viewPets()}
+
+    def show(task: Task) -> str:
+        pet = pet_names.get(task.petID, task.petID)
+        return f"{task.time}  {task.taskName:<20} {pet} [{task.status}]"
+
+    # --- sort_by_time(): tasks were added out of order; show them ordered ---
+    print("\n" + "=" * 46)
+    print("  Tasks sorted by time (sort_by_time)")
+    print("=" * 46)
+    for task in scheduler.sort_by_time():
+        print(f"  {show(task)}")
+
+    # --- filterTasks(status=...): only pending tasks ---
+    print("\n" + "=" * 46)
+    print("  Filter: status == 'pending'")
+    print("=" * 46)
+    for task in scheduler.filterTasks(status="pending"):
+        print(f"  {show(task)}")
+
+    # --- filterTasks(petName=...): only Luna's tasks ---
+    print("\n" + "=" * 46)
+    print("  Filter: petName == 'Luna'")
+    print("=" * 46)
+    for task in scheduler.filterTasks(petName="Luna", pets=owner.viewPets()):
+        print(f"  {show(task)}")
+
+
+def print_time_conflicts(scheduler: Scheduler) -> None:
+    """Print any same-time-slot warnings from the lightweight conflict check."""
+    print("\n" + "=" * 46)
+    print("  Time conflict check (detectTimeConflicts)")
+    print("=" * 46)
+
+    warnings = scheduler.detectTimeConflicts()
+    if not warnings:
+        print("  No time conflicts found.")
+        return
+    for warning in warnings:
+        print(f"  {warning}")
+
+
 def main() -> None:
     owner, scheduler = build_demo()
     print_todays_schedule(owner, scheduler)
+    print_sorted_and_filtered(owner, scheduler)
+    print_time_conflicts(scheduler)
 
 
 if __name__ == "__main__":

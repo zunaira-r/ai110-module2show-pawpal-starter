@@ -75,14 +75,50 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+PawPal+ adds four scheduling features on top of the basic task list. Each is
+documented below with the method that implements it.
 
-| Feature | Method(s) | Notes |
-|---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Feature | Method | Summary |
+|---------|--------|---------|
+| Sorting | `Scheduler.sort_by_time()` | Orders tasks by `"HH:MM"` time |
+| Filtering | `Scheduler.filterTasks()` | Filters by status and/or pet name |
+| Conflict detection | `Scheduler.detectTimeConflicts()` | Warns on same-time clashes |
+| Recurring tasks | `Task.nextOccurrence()` + `Scheduler.completeTask()` | Auto-reschedules daily/weekly tasks |
+
+### Sorting — `Scheduler.sort_by_time()`
+
+Returns tasks ordered chronologically by their `time` attribute. A lambda key
+(`key=lambda t: t.time`) sorts on the `"HH:MM"` string directly; because the
+format is zero-padded and fixed-width, lexicographic string order already
+matches clock order (`"08:30" < "09:15" < "13:00"`), so no time parsing is
+needed. Returns a new list without mutating `taskList`.
+
+### Filtering — `Scheduler.filterTasks(status=None, petName=None, pets=None)`
+
+Filters tasks by **completion status**, **pet name**, or both (combined with
+logical AND). Since a `Task` stores only `petID`, filtering by `petName`
+requires passing the `pets` list so names can be resolved to IDs (matching pet
+IDs are collected into a set for fast lookup). Passing no filters returns all
+tasks. Input validation on the `time` field lives in `Task._validate_time()`,
+enforced at construction (`__post_init__`) and on `modifyTask()`.
+
+### Conflict detection — `Scheduler.detectTimeConflicts()`
+
+A lightweight check that groups active (non-cancelled) tasks by their `"HH:MM"`
+slot in a single pass and flags any slot holding more than one task — for the
+same pet *or* different pets. It **returns a list of warning strings instead of
+raising**, so the program never crashes; an empty list means no conflicts. (The
+heavier interval-overlap check that also accounts for `duration` lives in
+`Scheduler.detectConflicts()`.)
+
+### Recurring tasks — `Task.nextOccurrence()` + `Scheduler.completeTask()`
+
+When a `"daily"` or `"weekly"` task is completed via `Scheduler.completeTask()`,
+the next occurrence is created and added to the schedule automatically. The date
+math lives in `Task.nextOccurrence()`, which uses `timedelta(days=1)` /
+`timedelta(weeks=1)` so month/year rollovers are handled correctly (e.g. a daily
+task due Jan 31 rolls to Feb 1). One-off tasks (`recurrence=""`) return `None`
+and nothing is rescheduled.
 
 ## 📸 Demo Walkthrough
 
